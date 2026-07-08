@@ -20,9 +20,12 @@ from openai import OpenAI
 from pydantic import BaseModel
 from openai.lib._pydantic import to_strict_json_schema
 
+EDIT_TYPE = config.EDIT_TYPE
+DATA_FOLDER_PATH = config.DATA_FOLDER_PATH
+
 
 SYSTEM_PROMPT = """# Identify
-You are a peer-review assistant. You will be provided with a scientific manuscript as a PDF file. Your task is to identify any discrepancies between the claims made in the text and the values presented in tables.
+You are a peer-review assistant. You will be provided with a scientific manuscript as a PDF file. Your task is to identify any limitations or errors between the claims made in the text and the values presented in tables.
 
 # Output Format
 Your output should be in valid JSON format, with the following schema:
@@ -54,9 +57,6 @@ def compile_latex(latex_path):
         latex_path.stem,
     ]
 
-    # latexmk -cd expects to be invoked from the directory containing main tex,
-    # but we also pass a full path to main_tex; latexmk can handle it.
-    # To reduce surprises, set cwd=source_dir.
     try:
         proc = subprocess.run(
             cmd,
@@ -122,11 +122,9 @@ def project_compiled_latex_iterator(src_dir, dst_dir):
 def compile_all_latex(src_dir, dst_dir):
     # compile all latex files
     tex_files = [f for f in os.listdir(src_dir) if f[-4:] == '.tex']
-    num_files = len(tex_files)
     manuscript_file_paths = []
     #do not iterate directly: iterate in order of number of edits so responses are in same order
-    for edit_num in range(num_files):
-        edited_latex = f'edit_{edit_num}.tex'
+    for edited_latex in tex_files:
         shutil.copy(src_dir / edited_latex, dst_dir / edited_latex)
         success = compile_latex(dst_dir / edited_latex)
 
@@ -139,6 +137,11 @@ def compile_all_latex(src_dir, dst_dir):
                 continue
 
         paper_path = dst_dir / (edited_latex[:-3] + 'pdf')
+
+        # compilation still failed
+        if not os.path.isfile(paper_path):
+            continue
+
         manuscript_file_paths.append(paper_path)
 
     return manuscript_file_paths
@@ -150,7 +153,8 @@ def manuscript_iterator(file_paths):
 
         file_data = base64.b64encode(data).decode("utf-8")
 
-        yield (SYSTEM_PROMPT, MESSAGE_TEMPLATE, file_data)
+        meta_id = paper_path.stem[5:] #combined paper + error id
+        yield (meta_id, SYSTEM_PROMPT, MESSAGE_TEMPLATE, file_data)
 
 def save_responses(responses):
     with open(f'output/responses_detect_error_{model_client.model_prefix_name}.dill', 'wb') as fp:
@@ -196,10 +200,16 @@ if __name__ == "__main__":
                 manuscript_file_paths = compile_all_latex(src_dir, dst_dir)
 
                 project_responses = []
-                for res in model_client.iterative_query(manuscript_iterator(manuscript_file_paths)):
-                    project_responses.append(res)
+                for meta_id, res in model_client.iterative_query(manuscript_iterator(manuscript_file_paths)):
+                    paper_id = meta_id.split('___')[0]
+                    error_id = meta_id.split('___')[1]
+                    project_responses.append((paper_id, error_id, res))
 
-                    res_dict = {'res': res}
+                    res_dict = {
+                        'meta_id': meta_id,
+                        'error_id': error_id,
+                        'response': res
+                    }
                     res_fp.write(json.dumps(res_dict) + '\n')
                     res_fp.flush()
 

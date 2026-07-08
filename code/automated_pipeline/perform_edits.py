@@ -1,9 +1,4 @@
-from utils.DataHandlers import LatexDataHandler
-from utils.ModelClient import ModelClient
-from pathlib import Path
-from collections import Counter
-from pylatexenc.latexwalker import LatexWalker, LatexMacroNode, LatexGroupNode
-from pylatexenc.latex2text import LatexNodes2Text
+
 
 import json
 import random
@@ -13,134 +8,137 @@ import shutil
 import subprocess
 import dill
 import nltk
+import itertools
+import config
 from nltk.tokenize import sent_tokenize
 from openai import OpenAI
 from pydantic import BaseModel
 from openai.lib._pydantic import to_strict_json_schema
-import itertools
+from utils.DataHandlers import LatexDataHandler
+from utils.ModelClient import ModelClient
+from pathlib import Path
+from collections import Counter
+from pylatexenc.latexwalker import LatexWalker, LatexMacroNode, LatexGroupNode
+from pylatexenc.latex2text import LatexNodes2Text
+from string2string.alignment import SmithWaterman
 
-MODEL_IDENTIFIER = "gpt_52"
-
-def calculate_distance(sentence1, sentence2):
-    tokens1 = sentence1.split()
-    tokens2 = sentence2.split()
-
-    sw = SmithWaterman()
-    aligned_seq1, aligned_seq2 = sw.get_alignment(tokens1, tokens2)
-
-    # if we drop too many tokens in the alignment, just return a large number: sentences are too different
-    if len(aligned_seq1) < 0.8 * len(tokens1) or len(aligned_seq2) < 0.8 * len(tokens2):
-        return len(tokens1) + len(tokens2)
-    else:
-        distance = nltk.edit_distance(aligned_seq1, aligned_seq2)
-        return distance
-    
-def validate_responses(responses):
-    validated = []
-
-    # validate that sentence is in latex
-    for i, latex in enumerate(data_handler.iterate_flat()):
-        if i == NUM_SAMPLES:
-            break
-
-        latex_sentences = sent_tokenize(latex)
-
-        edit_data = responses[i]['edits']
-        
-        for sentence_edits in edit_data:
-            sentence = sentence_edits['sentence']
-
-            min_dist = 100
-            best_match = ''
-            for ls in latex_sentences:
-                dist = calculate_distance(ls, sentence)
-                if dist < min_dist:
-                    min_dist = dist
-                    best_match = ls
-            
-            acceptable_range = 0.1 * len(sentence.split())
-            if min_dist > 0.1 * len(sentence.split()):
-                print(sentence)
-                print(best_match)
-                print(acceptable_range)
-                raise Exception("No match found for sentence")
-    
-    #check that all edits are valid: that is, each edit is in a unique table
-    for i in range(NUM_SAMPLES):
-        meta = data_handler.metadata[i]
-        tables = meta['tables']
-
-        edit_data = responses[i]['edits']
-        validated_edits = []
-        for sentence_edits in edit_data:
-            edit_list = sentence_edits['edit_list']
-            
-            valid = True
-            for edit in edit_list:
-                original = edit[0]
-                num_tables = 0
-
-                for table in data_handler.metadata[i]['tables']:
-                    if original in table[2]:
-                        num_tables += 1
-
-                if num_tables != 1:
-                    valid = False
-            
-            if valid:
-                validated_edits.append(sentence_edits)
-        
-        validated.append(validated_edits)
-
-    return validated
+MODEL_IDENTIFIER = config.EDIT_MODEL_INFO[2]
+EDIT_TYPE = config.EDIT_TYPE
+DATA_FOLDER_PATH = config.DATA_FOLDER_PATH
+COMPILATION_TYPE = config.COMPILATION_TYPE
+OUTPUT_FOLDER_PATH = config.OUTPUT_FOLDER_PATH
 
 def create_edited_files(validated):
     os.makedirs(f'workspace/edited_latex_files', exist_ok=True)
-    for i in range(NUM_SAMPLES):
-        latex = data_handler.get_latex_file(i)
+    for res_data in validated:
+        manuscript_id = res_data[0]
+        error_id = res_data[1]
+        sentence_edits = res_data[2] #sentences, edit_list, refuse
 
-        sentence_edits = validated[i]
-        if len(sentence_edits) == 0:
+        if sentence_edits['refuse'] or not sentence_edits['valid']:
+            sentence_edits['edited_latex_path'] = None
             continue
 
-        meta = data_handler.metadata[i]
+        ind = -1
+        for i, meta in enumerate(data_handler.metadata):
+            if meta['id'] == manuscript_id:
+                ind = i
+                break
+
+        latex = data_handler.get_latex_file(ind)
+
+        meta = data_handler.metadata[ind]
+
         project_id = meta['id']
         tmp_project_path = Path(f'workspace/edited_latex_files/{project_id}')
         os.makedirs(tmp_project_path, exist_ok=True)
 
-        for i, sentence_edit in enumerate(sentence_edits):
-            edit_list = sentence_edit['edit_list']
+        edit_list = sentence_edits['edit_list']
 
-            new_latex = latex
-            for edit in edit_list:
-                new_latex = new_latex.replace(edit[0], edit[1])
+        new_latex = latex
+        for edit in edit_list:
+            new_latex = new_latex.replace(edit['text_span_to_replace'], edit['new_text_span'])
 
-            with open(tmp_project_path / f'edit_{i}.tex', 'w') as fp:
-                fp.write(new_latex)
+        output_path = tmp_project_path / f'edit_{manuscript_id}___{error_id}.tex'
+        with open(output_path, 'w') as fp:
+            fp.write(new_latex)
 
-            if EDIT_TYPE == 'SEQUENTIAL':
-                latex = new_latex
+        sentence_edits['edited_latex_path'] = output_path
 
+        # if EDIT_TYPE == 'SEQUENTIAL':
+        #     latex = new_latex
+
+def compile_latex(latex_path):
+    cmd = [
+        'latexmk',
+        '-pdf',
+        #"-cd",  # run from source dir (helps relative paths)
+        #f"-outdir={str(build_dir)}",
+        latex_path.stem,
+    ]
+
+    try:
+        proc = subprocess.run(
+            cmd,
+            cwd=str(latex_path.parent),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=600,  # 10 minutes per paper
+        )
+
+        return True
+    except subprocess.TimeoutExpired:
+        return False
+    except Exception as e:
+        print(e)
+        return True
+    
+def compile_edited_files(validated):
+    for i, data in enumerate(validated):
+        project_id, error_id, res_data = data
+        edited_latex_path = res_data['edited_latex_path']
+
+        if edited_latex_path is None:
+            validated[i][2]['edited_pdf_path'] = None
+            continue
+
+        dst_dir = Path(f'workspace/dataset/{project_id}')
+        # copy original project folder to dataset folder in workspace
+        os.makedirs(dst_dir, exist_ok=True)
+        shutil.copytree(DATA_FOLDER_PATH / project_id, dst_dir, dirs_exist_ok=True)
+
+        #copy specific file to project latex folder
+        target_path = dst_dir / edited_latex_path.name
+        shutil.copy(edited_latex_path, target_path)
+
+        #compile
+        success = compile_latex(target_path)
+
+        paper_path = dst_dir / (edited_latex_path.stem + '.pdf')
+        if not success or not os.path.isfile(paper_path):
+            validated[i][2]['edited_pdf_path'] = None
+            continue
+
+        validated[i][2]['edited_pdf_path'] = paper_path
+
+    return validated
 
 if __name__=="__main__":
-    assert os.path.isfile(f'output/responses_edit_latex_{MODEL_IDENTIFIER}.dill')
+    data_handler = LatexDataHandler(DATA_FOLDER_PATH)
+    data_handler.flatten_latex(force_flatten=True)
+    assert os.path.isfile(f'output/responses_edit_latex_{MODEL_IDENTIFIER}_validated.dill')
 
-    with open(f'output/responses_edit_latex_{MODEL_IDENTIFIER}.dill', 'rb') as fp:
-        responses = dill.load(fp)
-
-    responses_dicts = []
-    for res in responses:
-        try:
-            res_json = json.loads(res)
-        except:
-            res_json_compatible = res.replace('(', '[').replace(')', ']')
-            res_json = json.loads(res_json_compatible)
-        
-    responses_dicts.append(res_json)
-
-    validated = validate_responses(responses_dicts)
-
-    with open('output/responses_edit_latex_gpt_52_validated.dill', 'wb') as fp:
-        dill.dump(validated, fp)
+    with open(f'output/responses_edit_latex_{MODEL_IDENTIFIER}_validated.dill', 'rb') as fp:
+        validated = dill.load(fp)
 
     create_edited_files(validated)
+
+    with open(f'output/responses_edit_latex_{MODEL_IDENTIFIER}_edited.dill', 'wb') as fp:
+        dill.dump(validated, fp)
+
+    if COMPILATION_TYPE == 'PRECOMPILE':
+        compile_edited_files(validated)
+
+        with open(f'output/responses_edit_latex_{MODEL_IDENTIFIER}_compiled.dill', 'wb') as fp:
+            dill.dump(validated, fp)
