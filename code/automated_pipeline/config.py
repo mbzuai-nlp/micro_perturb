@@ -11,6 +11,7 @@ DATA_FOLDER_PATH = Path('/Users/aadi.joshi/Desktop/scientific_fact_checking/tabu
 EDIT_MODEL_INFO = ("openai", "gpt-5.4", "gpt_54", "output/gpt54_workspace")
 
 DETECTION_MODELS_INFO = [
+    #("vllm", "Qwen/Qwen3.5-4B", "qwen_35_4b", "output/detect_qwen_35_4b_workspace"),
     #("openai", "gpt-5.2-2025-12-11", "gpt_52", "output/detect_gpt52_workspace"),
     ("openai", "gpt-5-mini-2025-08-07", "gpt_52_mini", "output/detect_gpt52_mini_workspace"),
     #("openrouter", "qwen/qwen3.5-397b-a17b", "qwen_35_397b", "output/detect_qwen_35_397b_workspace"),
