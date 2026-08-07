@@ -202,16 +202,16 @@ class ModelClient():
         os.makedirs(self.model_directory, exist_ok=True)
         
         if model_type == "openai":
-            api_key = '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'
+            api_key = os.environ.get("OPENAI_API_KEY")
             self.client = OpenAIClient(model_name=self.model_name, api_key=api_key)
         elif model_type == "openrouter":
-            OPENROUTER_API_KEY = "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"
+            OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
             self.client = OpenAIClient(model_name=self.model_name, base_url="https://openrouter.ai/api/v1", api_key=OPENROUTER_API_KEY)
         # elif model_type == "gemini":
-        #     GEMINI_API_KEY = "AIzaSyAxrtFQsvJtMejfaBAHgUROLfOzVd67dwY"
+        #     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
         #     self.client = genai.Client(api_key=GEMINI_API_KEY)
         # elif model_type == "mistral":
-        #     MISTRAL_API_KEY = "Ct8Nr8UVqsbQpYjq2yvgyoDxVrGyQnrm"
+        #     MISTRAL_API_KEY = os.environ.get("MISTRAL_API_KEY")
         #     self.client = Mistral(api_key=MISTRAL_API_KEY)
         else:
             raise ValueError(f"Unsupported model type: {model_type}")
