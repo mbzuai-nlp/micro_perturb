@@ -13,6 +13,12 @@ Install requirements.
 
 `pip install -r requirements.txt`
 
+Also install the shared package containing utility code:
+
+`cd pipeline_full`
+
+`pip install -e .`
+
 The full pipeline can be found in `pipeline_full`. The file `pipeline_full/config.py` can be edited to change the configuration of the pipeline run. It contains preconfigured pipelines that were used in the paper.
 
 To run the pipeline, run the `pipeline_full/run.py` script. All outputs will be stored in the `output` folder by default unless the configuration is changed.
