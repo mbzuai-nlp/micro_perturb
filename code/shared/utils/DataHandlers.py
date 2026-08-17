@@ -8,14 +8,6 @@ from collections import defaultdict
 from TexSoup import TexSoup
 from pylatexenc.latexwalker import LatexWalker, LatexEnvironmentNode
 
-ROOT_RE = re.compile(r'^\s*%\s*!TeX\s+root\s*=\s*(.+?)\s*$', re.IGNORECASE | re.MULTILINE)
-INPUT_RE = re.compile(r'\\(?:input|include)\{([^}]+)\}')
-DOCCLASS_RE = re.compile(r'\\documentclass(?:\[[^\]]*\])?\{[^}]+\}')
-BEGIN_DOC_RE = re.compile(r'\\begin\{document\}')
-SUBFILES_CLASS_RE = re.compile(r'\\documentclass(?:\[[^\]]*\])?\{subfiles\}')
-SUBFILES_USE_RE = re.compile(r'\\usepackage(?:\[[^\]]*\])?\{subfiles\}')
-
-
 #adaptation of VimTex implementation, just using the simple stuff: https://github.com/lervag/vimtex/blob/3daee2934dfa858bbabde2053893bd46b89b4ec7/autoload/vimtex/state.vim
 # 1. Search for root specifier
 # 2. Look for \documentclass followed by \begin{document} somewhere below
@@ -81,7 +73,7 @@ def compile_latex_file(latex_path):
     except Exception as e:
         print(e)
         return True
-        
+
 class LatexDataHandler:
     def __init__(self, latex_dir):
         self.latex_dir = Path(latex_dir)
@@ -101,7 +93,8 @@ class LatexDataHandler:
             if len(str(meta['flattened_pdf_path'])) == 0:
                 continue
 
-            if not os.path.isfile(meta['flattened_pdf_path']):
+            parent_folder = self.latex_dir / meta['folder_path']
+            if not os.path.isfile(parent_folder / meta['flattened_pdf_path']):
                 continue
 
             new_metadata.append(meta)
@@ -115,9 +108,7 @@ class LatexDataHandler:
         if metadata_path.is_file():
             with open('metadata.dill', 'rb') as fp:
                 self.metadata = dill.load(fp)
-                # for line in fp:
-                #     data = json.loads(line)
-                #     self.metadata.append(data)
+
         else:
             self.load_data_paths()
             self.detect_main_tex()
@@ -129,10 +120,8 @@ class LatexDataHandler:
     def save_metadata(self):
         with open('metadata.dill', 'wb') as fp:
             dill.dump(self.metadata, fp)
-        #     for meta in self.metadata:
-        #         meta_json = json.dumps(meta)
-        #         fp.write(meta_json + '\n')
 
+    # loads all path information for important files (we save this relative to initial provided path - so if directory moves, it stays consistent)
     def load_data_paths(self):
         for latex_project_folder in os.listdir(self.latex_dir):
             #skip hidden files
@@ -141,59 +130,56 @@ class LatexDataHandler:
 
             self.metadata.append({
                 'id': latex_project_folder,
-                'folder_path': self.latex_dir / latex_project_folder
+                'folder_path': Path(latex_project_folder)
             })
     
     def detect_main_tex(self):
         for meta in self.metadata:
             latex_project_folder_path = meta['folder_path']
-            main_file = detect_main_tex(latex_project_folder_path)
+            main_file = detect_main_tex(self.latex_dir / latex_project_folder_path)
             if main_file is None:
                 meta['main_file_path'] = ""
             else:
-                meta['main_file_path'] = latex_project_folder_path.parent / main_file
+                meta['main_file_path'] = Path(main_file)
 
     def flatten_file(self, meta, force_flatten=False):
         main_file = meta['main_file_path']
-        output_file = main_file.parent / 'flat_main.tex'
+        parent_folder = self.latex_dir / meta['folder_path']
+        input_file = parent_folder / main_file
+        output_file = parent_folder / 'flat_main.tex'
 
         if force_flatten or not output_file.is_file():
             with output_file.open("w") as f:
                 subprocess.run(
-                    ["latexpand", str(main_file)],
-                    cwd=main_file.parent,
+                    ["latexpand", str(input_file)],
+                    cwd=parent_folder,
                     stdout=f,
                     check=True
                 )
 
-        meta['flattened_file_path'] = output_file
+        meta['flattened_file_path'] = Path('flat_main.tex')
     
     def compile_latex(self):
         print("compiling...")
         for i, meta in enumerate(self.metadata):
             print(f"Compiling {i}: {meta['id']}")
-            compile_latex_file(meta['flattened_file_path'])
-            compiled_pdf_path = Path(os.path.splitext(meta['flattened_file_path'])[0] + '.pdf')
-            if os.path.isfile(compiled_pdf_path):
+            parent_folder = self.latex_dir / meta['folder_path']
+            flattened_file_path = parent_folder / meta['flattened_file_path']
+            compile_latex_file(flattened_file_path)
+
+            compiled_pdf_path = Path(str(meta['flattened_file_path'].stem) + '.pdf')
+            if os.path.isfile(parent_folder / compiled_pdf_path):
                 meta['flattened_pdf_path'] = compiled_pdf_path
                 continue
-            
+
+            # just do the same thing again but try force flattening the file first
             self.flatten_file(meta, force_flatten=True)
-            compile_latex_file(meta['flattened_file_path'])
-            if os.path.isfile(compiled_pdf_path):
+            compile_latex_file(flattened_file_path)
+            if os.path.isfile(parent_folder / compiled_pdf_path):
                 meta['flattened_pdf_path'] = compiled_pdf_path
                 continue
             
             meta['flattened_pdf_path'] = ""
-            # if success:
-            #     meta['flattened_pdf_path'] = Path(os.path.splitext(meta['flattened_file_path'])[0] + '.pdf')
-            # else:
-            #     self.flatten_file(meta, force_flatten=True)
-            #     success = compile_latex_file(meta['flattened_file_path'])
-            #     if success:
-            #         meta['flattened_pdf_path'] = Path(os.path.splitext(meta['flattened_file_path'])[0] + '.pdf')
-            #     else:
-            #         meta['flattened_pdf_path'] = ""
 
     def flatten_latex(self, force_flatten=False):
         for meta in self.metadata:
@@ -244,10 +230,28 @@ class LatexDataHandler:
 
     def iterate_flat(self):
         for meta in self.metadata:
-            data = self.load_file(meta['flattened_file_path'])
+            parent_folder = self.latex_dir / meta['folder_path']
+            data = self.load_file(parent_folder / meta['flattened_file_path'])
             yield data
 
     def get_latex_file(self, i):
         meta = self.metadata[i]
-        data = self.load_file(meta['flattened_file_path'])
+        parent_folder = self.latex_dir / meta['folder_path']
+        data = self.load_file(parent_folder / meta['flattened_file_path'])
         return data
+
+    def get_meta_by_id(self, meta_id):
+        for meta in self.iterate_metadata():
+            if meta['id'] == meta_id:
+                return meta
+                    
+    def get_latex_file_by_id(self, meta_id):
+        for meta in self.iterate_metadata():
+            if meta['id'] == meta_id:
+                parent_folder = self.latex_dir / meta['folder_path']
+                data = self.load_file(parent_folder / meta['flattened_file_path'])
+                return data
+
+    def get_path(self, meta, key):
+        parent_folder = self.latex_dir / meta['folder_path']
+        return parent_folder / meta[key]

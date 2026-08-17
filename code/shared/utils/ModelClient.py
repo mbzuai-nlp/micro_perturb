@@ -10,9 +10,12 @@ import tiktoken
 import base64
 import dill
 import itertools
+import importlib
+import sys
+import inspect
+import io
 from pathlib import Path
 from PIL import Image
-import io
 from openai import OpenAI, APIStatusError
 from pydantic import BaseModel
 from openai.types.responses import Response
@@ -82,7 +85,6 @@ class OpenAIClient():
         self.model_name = model_name
         if base_url is not None:
             self.client = OpenAI(api_key=api_key, base_url=base_url)
-            self.client_type = "openrouter"
         else:
             self.client = OpenAI(api_key=api_key)
 
@@ -664,15 +666,30 @@ class ModelClient():
             if len(failed_batches) > 0:
                 batches = batches + self.retry_failed_batches(failed_batches)
 
+
     # wrapper with caching
-    def iterative_query(self, iter, cache_file_path=None, batch=False, retry_cached_empty_response=False):
+    def iterative_query(self, iter, cache_file_path=None, batch=False, retry_cached_empty_response=False, structured_output_path=None):
         # load from cache: don't adjust iterator, since cached responses may not be in same order as input
         processed_list = []
         if cache_file_path is not None:
-            cache_file = cache_file_path + '.dill'
+            cache_file = cache_file_path
 
             if os.path.exists(cache_file):
                 print('Loading from cache...')
+
+                # load structured output classes
+                if structured_output_path is not None:
+                    spec = importlib.util.spec_from_file_location("structured_output", structured_output_path)
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+
+                    #only need this for compatibility - remove for any new project/caches
+                    main = sys.modules["__main__"]
+
+                    for name, obj in vars(module).items():
+                        if inspect.isclass(obj):
+                            setattr(main, name, obj)
+
                 for res_data in self.load_from_cache(cache_file):
                     if res_data['response'] is None or (retry_cached_empty_response and len(res_data['response']) == 0):
                         print(f"[{res_data['meta_id']}: empty response in cache, skipping load")
@@ -684,20 +701,20 @@ class ModelClient():
             else:
                 cache_fp = open(cache_file, 'wb')
 
-        query_func = self._iterative_query
+        # query_func = self._iterative_query
 
-        if batch:
-            query_func = self._batch_query
+        # if batch:
+        #     query_func = self._batch_query
 
-        for req_id, response in query_func(iter, processed_list):
-            if cache_file_path is not None:
-                res_dict = {
-                    'meta_id': req_id,
-                    'response': response,
-                }
-                dill.dump(res_dict, cache_fp)
+        # for req_id, response in query_func(iter, processed_list):
+        #     if cache_file_path is not None:
+        #         res_dict = {
+        #             'meta_id': req_id,
+        #             'response': response,
+        #         }
+        #         dill.dump(res_dict, cache_fp)
 
-            yield req_id, response
+        #     yield req_id, response
 
         if cache_file_path is not None:
             cache_fp.close()
