@@ -113,7 +113,7 @@ def _validate_responses(data_handler, responses):
     return new_responses
 
 def validate_responses(config, input_file, output_file):
-    data_handler = LatexDataHandler(config["DATA_FOLDER_PATH"])
+    data_handler = LatexDataHandler(config["DATA_FOLDER_PATH"], config["METADATA_OUTPUT_PATH"])
     assert os.path.isfile(input_file)
 
     with open(input_file, 'rb') as fp:
