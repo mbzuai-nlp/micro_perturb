@@ -1,5 +1,6 @@
 # Each step produces output in the form {input_file_name}___{task_id}_{model_id}
 # so as long as previous step model is different or current step is different it won't overwrite
+
 CONFIG = {}
 
 CONFIG["PREPROCESSING_CONFIG"] = {
@@ -10,6 +11,7 @@ CONFIG["PREPROCESSING_CONFIG"] = {
     "NUM_SAMPLES": 60,
     "DATA_FOLDER_PATH": '/Users/aadi.joshi/Desktop/scientific_fact_checking/tabular_scientific_fact_checking/datasets/arxiv_sources',
     "OUTPUT_PATH": 'output/input_manuscript_ids.txt',
+    "METADATA_OUTPUT_PATH": 'output/metadata/metadata.dill'
 }
 
 CONFIG["GENERATE_CONFIG"] = {
@@ -18,6 +20,7 @@ CONFIG["GENERATE_CONFIG"] = {
     "DATA_FOLDER_PATH": '/Users/aadi.joshi/Desktop/scientific_fact_checking/tabular_scientific_fact_checking/datasets/arxiv_sources',
     # Output path for edits
     "OUTPUT_FOLDER_PATH": 'output/generate/',
+    "METADATA_OUTPUT_PATH": 'output/metadata/metadata.dill',
     "STRUCTURED_OUTPUT_PATH": 'generate/structured_outputs.py',
     # where to store edited latex and pdf files
     "EDITED_OUTPUT_DIR": 'output/datasets/',

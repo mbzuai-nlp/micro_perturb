@@ -106,7 +106,7 @@ class PreprocessingStage(Stage):
     def run(self):
         self.output_artifacts = []
         #when data handler is instantiated it will load files in the directory, flatten them, compile them, save metadata, etc.
-        data_handler = LatexDataHandler(self.config["DATA_FOLDER_PATH"])
+        data_handler = LatexDataHandler(self.config["DATA_FOLDER_PATH"], self.config["METADATA_OUTPUT_PATH"])
         start = self.config["SKIP_SAMPLES"]
         end = self.config["SKIP_SAMPLES"]+self.config["NUM_SAMPLES"]
 

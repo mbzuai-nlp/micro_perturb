@@ -161,7 +161,7 @@ def edit_and_compile(validated, data_handler, dataset_path):
 
 
 def perform_edits(config, input_file, output_file, dataset_path):
-    data_handler = LatexDataHandler(config["DATA_FOLDER_PATH"])
+    data_handler = LatexDataHandler(config["DATA_FOLDER_PATH"], config["METADATA_OUTPUT_PATH"])
     # data_handler.flatten_latex(force_flatten=True)
 
     assert os.path.isfile(input_file)

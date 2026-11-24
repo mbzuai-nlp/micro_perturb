@@ -75,8 +75,9 @@ def compile_latex_file(latex_path):
         return True
 
 class LatexDataHandler:
-    def __init__(self, latex_dir):
+    def __init__(self, latex_dir, output_path):
         self.latex_dir = Path(latex_dir)
+        self.output_path = Path(output_path) #where metadata is stored
         self.load_metadata()
         self.filter_metadata()
 
@@ -102,11 +103,11 @@ class LatexDataHandler:
         self.metadata = new_metadata
 
     def load_metadata(self):
-        metadata_path = Path('metadata.dill')
+        metadata_path = self.output_path
         self.metadata = []
 
         if metadata_path.is_file():
-            with open('metadata.dill', 'rb') as fp:
+            with open(self.output_path, 'rb') as fp:
                 self.metadata = dill.load(fp)
 
         else:
@@ -118,7 +119,7 @@ class LatexDataHandler:
             self.save_metadata()
                 
     def save_metadata(self):
-        with open('metadata.dill', 'wb') as fp:
+        with open(self.output_path, 'wb') as fp:
             dill.dump(self.metadata, fp)
 
     # loads all path information for important files (we save this relative to initial provided path - so if directory moves, it stays consistent)

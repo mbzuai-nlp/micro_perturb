@@ -240,7 +240,7 @@ def edit_data_iterator(data_handler, manuscript_ids, sampling_details=None):
             yield (req_id, req_data)
 
 def generate_edits(config, model_id, input_path, output_path, cache_path, structured_output_path=None):
-    data_handler = LatexDataHandler(config["DATA_FOLDER_PATH"])
+    data_handler = LatexDataHandler(config["DATA_FOLDER_PATH"], config["METADATA_OUTPUT_PATH"])
 
     manuscript_ids = []
     with open(input_path, 'r') as fp:
