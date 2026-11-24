@@ -4,7 +4,7 @@
 
 Companion repository to the paper "Micro-Perturb: An Automated Perturbation-Based Framework for Evaluating LLMs on Table-Text Weakness Detection".
 
-![Micro-Perturb Categories](assets/examples_large_redone.png)
+![Micro-Perturb Categories](assets/example_large_redone.png)
 
 ## Abstract
 
