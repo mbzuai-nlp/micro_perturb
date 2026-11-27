@@ -4,11 +4,22 @@
 
 Companion repository to the paper "Micro-Perturb: An Automated Perturbation-Based Framework for Evaluating LLMs on Table-Text Weakness Detection".
 
-![Micro-Perturb Categories](assets/examples_large_redone.png)
+![Micro-Perturb Categories](assets/example_large_redone.png)
 
 ## Abstract
 
 Scholarly peer-reviewing is a critical but time-consuming task. Existing work has studied how language models can assist in the review process, with scientific errors and weaknesses detection emerging as a key application. Motivated by the existing work on scientific claim verification, we introduce the task of \emph{table--text weakness detection} in scientific manuscripts. Through an inductive qualitative analysis of peer-review data, we identify five main categories of table--text weaknesses. We then introduce a guided perturbation pipeline for introducing such weaknesses into scientific manuscripts, and evaluate models on their ability to detect them. Extensive human validation demonstrates that our pipeline reliably generates realistic weaknesses across most categories. Finally, we benchmark various vision-language models on both the full generated dataset and a human-validated subset. Our results show that the models are able to reliably detect explicit logical inconsistencies, but struggle with more subtle semantic, contextual, and methodological weaknesses.
+
+# Code
+## Requirements
+
+### API Keys
+Add keys to the following environment variables: `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY` depending on which API you are using.
+
+Add an OpenAlex key to...
+
+### System tools
+Install `latexmk`, `latexpand`, and `Poppler`.
 
 ## Usage
 Install requirements.
