@@ -18,8 +18,16 @@ Add keys to the following environment variables: `OPENAI_API_KEY`, `OPENROUTER_A
 
 Add an OpenAlex key to...
 
+You must also configure boto3 with your aws credentials, see [instructions](https://docs.aws.amazon.com/boto3/latest/guide/quickstart.html#configuration). We use the arXiv aws bucket which is requester pays, so ensure that the account is setup for billing. To setup boto3 you may use `aws configure` or setup `~/.aws/credentials`:
+
+```
+[default]
+aws_access_key_id = YOUR_ACCESS_KEY
+aws_secret_access_key = YOUR_SECRET_KEY
+```
+
 ### System tools
-Install `latexmk`, `latexpand`, and `Poppler`.
+Install [latexmk](https://mgeier.github.io/latexmk.html#installation), [latexpand](https://miktex.org/packages/latexpand), and [Poppler](https://poppler.freedesktop.org/).
 
 ## Usage
 Install requirements.
@@ -32,8 +40,15 @@ Also install the shared package containing utility code:
 
 `pip install -e .`
 
-The full pipeline can be found in `pipeline_full`. The file `pipeline_full/config.py` can be edited to change the configuration of the pipeline run. It contains preconfigured pipelines that were used in the paper.
+The full pipeline can be found in `code/pipeline_full`. The file `code/pipeline_full/config.py` can be edited to change the configuration of the pipeline run. It contains preconfigured pipelines that were used in the paper.
 
 To run the pipeline, run the `pipeline_full/run.py` script. All outputs will be stored in the `output` folder by default unless the configuration is changed.
 
 For models run locally using VLLM, move the output files into the detection output folder (by default this is `pipeline_full/output/detect/`) and run the pipeline as usual.
+
+# Data
+The artifacts produced from our study are provided in the sqlite3 file `/data/all_data.db`. We do not provide the original manuscript files from arXiv. To download those, please use our provided downloader:
+
+`/code/pipeline_full/dataset/latex_s3_downloader.py`
+
+Once the dataset is downloaded configure `code/pipeline_full/config.py` to point to the downloaded dataset path. To run a new model on our exact datasets, the generation and ground_truth output needs to be extracted from the database, structured, and copied to the relevant folders in `/data/pipeline_full/output/{run_output_folder}/{step}/` where `{run_output_folder}` is setup in `code/pipeline_full/config.py`. To rerun our analysis on the same models, this process must also be repeated for the outputs of `/data/pipeline_full/output/{run_output_folder}/detect/`.
